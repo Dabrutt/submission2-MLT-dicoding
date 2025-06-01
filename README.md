@@ -110,7 +110,183 @@ Fitur yang tetap dipertahankan adalah:
 
 ### Deteksi Missing Value
 ![image](https://github.com/user-attachments/assets/bb22b0f0-c01e-4a25-ab24-b6de155a63f4)
-1. Rating
-    Terdapat 545 entri pada kolom Rating yang bernilai kosong. Ini menunjukkan bahwa ada sejumlah anime yang tidak memiliki klasifikasi umur resmi seperti G (General), PG (Parental Guidance), R (Restricted), dan  sebagainya. Hal ini bisa terjadi karena:
-    - Anime tersebut belum diklasifikasikan secara resmi.
-    - Informasi tidak tersedia pada saat data dikumpulkan.
+
+**1. Rating**
+
+Terdapat 545 entri pada kolom Rating yang bernilai kosong. Ini menunjukkan bahwa ada sejumlah anime yang tidak memiliki klasifikasi umur resmi seperti G (General), PG (Parental Guidance), R (Restricted), dan  sebagainya. Hal ini bisa terjadi karena:
+
+- Anime tersebut belum diklasifikasikan secara resmi.
+- Informasi tidak tersedia pada saat data dikumpulkan.
+
+**2. Score**
+
+Kolom ini memiliki 6.898 nilai kosong, yang merupakan jumlah tertinggi dibandingkan kolom lainnya. Ini berarti banyak anime dalam dataset tidak memiliki skor penilaian dari pengguna. Kemungkinan penyebabnya antara lain:
+
+- Anime baru atau belum rilis sehingga belum memiliki cukup ulasan.
+- Anime yang kurang dikenal atau memiliki sedikit penonton.
+- Data skor tidak tersedia saat pengumpulan.
+
+### Deteksi Data Duplikat
+`df.duplicated().sum()`
+
+> np.int64(0)
+
+Tidak ditemukan data duplikat
+
+### Deteksi outlier
+```
+# Deteksi Outlier dengan metode IQR
+def detect_outliers(data):
+    outlier_summary = {}
+    for column in data.select_dtypes(include=np.number).columns:
+        Q1 = data[column].quantile(0.25)
+        Q3 = data[column].quantile(0.75)
+        IQR = Q3 - Q1
+        lower_bound = Q1 - 1.5 * IQR
+        upper_bound = Q3 + 1.5 * IQR
+        outliers = data[(data[column] < lower_bound) | (data[column] > upper_bound)]
+        outlier_summary[column] = len(outliers)
+
+    return outlier_summary
+
+# Menjalankan fungsi untuk dataset (tanpa kolom target)
+indicators_columns = df.drop(columns=['risk_score'], errors='ignore')
+outlier_counts = detect_outliers(indicators_columns)
+
+# Menampilkan jumlah outlier per kolom
+print("Jumlah outlier per kolom:")
+for col, count in outlier_counts.items():
+    print(f"{col}: {count}")
+```
+> Jumlah outlier per kolom:
+> </br>ID: 0
+> </br>Score: 81
+> </br>Popularity: 0
+
+Dalam proses eksplorasi data, ditemukan bahwa nilai outlier hanya teridentifikasi pada kolom Score. Oleh karena itu, fokus analisis terhadap outlier cukup diarahkan pada kolom Score saja.
+
+![image](https://github.com/user-attachments/assets/8015d351-8c86-4876-a379-65ada4748c6f)
+
+> IQR untuk kolom 'Score': 1.29
+> </br>Batas bawah: 3.86
+> </br>Batas atas : 9.02
+> </br>Jumlah outlier pada kolom 'Score': 81
+
+Outlier dalam data `Score` mencerminkan opini atau penilaian pengguna yang sangat ekstrim. Dalam konteks sistem rekomendasi, nilai-nilai ini penting untuk dipertahankan, karena membantu mengenali pola preferensi pengguna yang lebih jelas dan tajam.
+
+### Data Cleaning
+`df_clean = df.dropna()`
+
+```
+print(f"Jumlah baris sebelum data cleansing: {df.shape[0]}")
+print(f"Jumlah baris sesudah data cleansing: {df_clean.shape[0]}")
+```
+
+> Jumlah baris sebelum data cleansing: 21460
+> Jumlah baris sesudah data cleansing: 14465
+
+Saya hanya menghapus data yang mengandung nilai kosong, karena sebagian besar data yang hilang terdapat pada kolom rating dan skor. Hal ini menunjukkan bahwa anime tersebut kemungkinan masih baru atau bahkan belum dirilis, sehingga dapat memengaruhi hasil analisis akhir.
+
+### Ekstraksi Fitur
+```
+# Gabungkan kolom konten (Genre + Studio + Demographics) menjadi satu string deskriptif
+df_clean['Content'] = df_clean['Genres'] + ', ' + df_clean['Demographics'].fillna('')
+```
+
+Kode ini digunakan untuk menggabungkan kolom Genres dan Demographics ke dalam satu kolom baru bernama Content. Tujuannya adalah menyatukan informasi deskriptif dari suatu anime agar dapat dianalisis sebagai satu kesatuan teks.
+
+```
+# Normalisasi teks genre (hilangkan null dan lowercase)
+df_clean['Content'] = df_clean['Content'].fillna('').str.lower()
+```
+
+Setelah kolom Content terbentuk, langkah ini bertujuan untuk melakukan normalisasi teks dengan mengubah semua huruf menjadi huruf kecil (lowercase) dan menghilangkan nilai kosong. Ini penting untuk memastikan konsistensi format teks sebelum dilakukan proses vektorisasi.
+
+```
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# TF-IDF Vectorization pada 'content'
+tfidf = TfidfVectorizer(stop_words='english')
+tfidf_matrix = tfidf.fit_transform(df_clean['Content'])
+
+# Cek bentuk matriks
+print(f"TF-IDF matrix shape: {tfidf_matrix.shape}")
+```
+> TF-IDF matrix shape: (14465, 32)
+
+Blok kode ini menerapkan teknik TF-IDF untuk mengubah teks pada kolom Content menjadi bentuk numerik. TF-IDF digunakan untuk menilai seberapa penting suatu kata dalam deskripsi anime dibandingkan dengan seluruh koleksi data, sekaligus mengabaikan kata-kata umum (stop words) berbahasa Inggris.
+
+Kemudian `print(f"TF-IDF matrix shape: {tfidf_matrix.shape}")` digunakan untuk menampilkan ukuran matriks TF-IDF yang terbentuk. Ukuran tersebut menunjukkan jumlah anime (baris) dan jumlah fitur unik (kata-kata penting) yang berhasil diekstraksi dari kolom Content.
+
+# Modelling
+## Cosine Similarity
+
+```
+from sklearn.metrics.pairwise import linear_kernel
+
+# Hitung cosine similarity antar anime
+cosine_sim = linear_kernel(tfidf_matrix, tfidf_matrix)
+```
+
+```
+# Buat index judul ke index dataframe
+indices = pd.Series(df_clean.index, index=df_clean['Title']).drop_duplicates()
+```
+
+```
+# Fungsi sistem rekomendasi
+def recommend(Title, num_recommendations=5):
+    if Title not in indices:
+        return f"Anime '{Title}' tidak ditemukan."
+
+    idx = indices[Title]
+    sim_scores = list(enumerate(cosine_sim[idx]))
+
+    # Urutkan berdasarkan skor kemiripan
+    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
+    sim_scores = sim_scores[1:num_recommendations+1]  # abaikan diri sendiri
+
+    anime_indices = [i[0] for i in sim_scores]
+
+    # Tampilkan kolom penting
+    return df_clean[['Title', 'English', 'Content', 'Synopsis', 'Studios', 'Status', 'Rating', 'Score']].iloc[anime_indices].reset_index(drop=True)
+```
+
+Pada tahap modeling, sistem rekomendasi yang dibangun menggunakan pendekatan content-based filtering dengan algoritma cosine similarity sebagai inti perhitungannya. Algoritma ini digunakan untuk mengukur tingkat kemiripan antar item (dalam hal ini, anime) berdasarkan informasi konten yang telah direpresentasikan dalam bentuk vektor melalui teknik TF-IDF.
+
+Cosine similarity bekerja dengan menghitung sudut (cosine) antara dua vektor dalam ruang berdimensi tinggi. Nilai cosine similarity berkisar antara 0 hingga 1, di mana nilai 1 menunjukkan dua vektor sangat mirip (arahnya sama), dan nilai 0 menunjukkan tidak ada kemiripan sama sekali. Dalam konteks ini, vektor yang dibandingkan adalah representasi teks dari kolom Content, yang berisi gabungan genre dan demografi masing-masing anime.
+
+Dengan menggunakan fungsi linear_kernel dari pustaka sklearn, perhitungan cosine similarity dilakukan antar semua pasangan anime dalam dataset. Hasilnya adalah matriks kemiripan yang menyimpan nilai cosine antara setiap pasangan anime. Matriks ini menjadi dasar bagi sistem rekomendasi untuk menampilkan top-N recommendation, yaitu daftar anime yang paling mirip dengan judul yang diberikan pengguna berdasarkan skor kemiripan tertinggi.
+
+## Interpretasi
+```
+title = "Naruto"
+rekomendasi = recommend(title)
+
+print(f"Rekomendasi untuk '{title}':\n")
+rekomendasi
+```
+> Rekomendasi untuk 'Naruto':
+> | Title                   | English              | Content                              | Synopsis                                                                 | Studios       | Status           | Rating                      | Score |
+> |-------------------------|----------------------|---------------------------------------|--------------------------------------------------------------------------|---------------|------------------|------------------------------|--------|
+> | Hunter x Hunter (2011)  | Hunter x Hunter      | action, adventure, fantasy, shounen  | Hunters devote themselves to accomplishing hazardous tasks...            | Madhouse      | Finished Airing  | PG-13 - Teens 13 or older    | 9.041  |
+> | Naruto: Shippuuden      | Naruto Shippuden     | action, adventure, fantasy, shounen  | It has been two and a half years since Naruto left...                    | Pierrot       | Finished Airing  | PG-13 - Teens 13 or older    | 8.241  |
+> | One Piece               | One Piece            | action, adventure, fantasy, shounen  | Gol D. Roger was known as the "Pirate King," the strongest...            | Toei Animation| Currently Airing | PG-13 - Teens 13 or older    | 8.671  |
+> | Nanatsu no Taizai       | The Seven Deadly Sins| action, adventure, fantasy, shounen  | In a world similar to the European Middle Ages...                        | A-1 Pictures  | Finished Airing  | PG-13 - Teens 13 or older    | 7.701  |
+> | Bleach                  | Bleach               | action, adventure, fantasy, shounen  | Ichigo Kurosaki is an ordinary high schooler—until he...                | Pierrot       | Finished Airing  | PG-13 - Teens 13 or older    | 7.881  |
+
+```
+title = "Tenki no Ko"
+rekomendasi = recommend(title)
+
+print(f"Rekomendasi untuk '{title}':\n")
+rekomendasi
+```
+> Rekomendasi untuk 'Tenki no Ko':
+> | Title                          | English                        | Content                              | Synopsis                                                                 | Studios            | Status           | Rating                      | Score |
+> |--------------------------------|--------------------------------|---------------------------------------|--------------------------------------------------------------------------|---------------------|------------------|------------------------------|--------|
+> | ReLIFE                         | ReLIFE                         | drama, romance, slice of life, unknown | Dismissed as a hopeless loser by those around...                         | TMS Entertainment   | Finished Airing  | PG-13 - Teens 13 or older    | 7.981  |
+> | Byousoku 5 Centimeter          | 5 Centimeters Per Second       | drama, romance, slice of life, unknown | What happens when two people love each other but...                      | CoMix Wave Films    | Finished Airing  | PG-13 - Teens 13 or older    | 7.591  |
+> | Kimi no Suizou wo Tabetai     | I Want To Eat Your Pancreas    | drama, romance, slice of life, unknown | The aloof protagonist: a bookworm who is deeply...                       | Studio VOLN         | Finished Airing  | PG-13 - Teens 13 or older    | 8.561  |
+> | Kotonoha no Niwa              | The Garden of Words            | drama, romance, slice of life, unknown | On a rainy morning in Tokyo, Takao Akizuki, an...                        | CoMix Wave Films    | Finished Airing  | PG-13 - Teens 13 or older    | 7.911  |
+> | Josee to Tora to Sakana-tachi | Josee, the Tiger and the Fish  | drama, romance, slice of life, unknown | Equipped with his passion for diving and admiration...                   | Bones               | Finished Airing  | PG-13 - Teens 13 or older    | 8.441  |
