@@ -53,7 +53,17 @@ Dataset ini berisi informasi lengkap mengenai anime yang terdaftar di situs MyAn
 | Studios            | Studio yang memproduksi anime                                            | object     |
 | Source             | Sumber cerita anime (manga, novel, original, dll)                        | object     |
 | Genres             | Daftar genre anime (aksi, drama, komedi, dll)                            | object     |
-| Themes             | Tema-tema yang diangkat da
+| Themes             | Tema-tema yang diangkat dalam anime                                      | object     |
+| Demographics       | Sasaran demografis (shounen, seinen, josei, dll)                         | object     |
+| Duration_Minutes   | Durasi tiap episode (dalam menit)                                        | float64    |
+| Rating             | Kategori usia penonton (PG-13, R, dll)                                   | object     |
+| Score              | Skor rata-rata dari pengguna MyAnimeList.net                             | float64    |
+| Scored_Users       | Jumlah pengguna yang memberikan skor                                     | float64    |
+| Ranked             | Peringkat berdasarkan skor tertinggi                                     | float64    |
+| Popularity         | Peringkat berdasarkan popularitas (jumlah yang menambahkan ke daftar)    | int64      |
+| Members            | Jumlah pengguna yang menambahkan anime ke daftar mereka                  | int64      |
+| Favorites          | Jumlah pengguna yang menandai anime sebagai favorit                      | int64      |
+
 
 ## EDA
 ### 1. Distribusi Skor Anime
@@ -258,7 +268,7 @@ Cosine similarity bekerja dengan menghitung sudut (cosine) antara dua vektor dal
 
 Dengan menggunakan fungsi linear_kernel dari pustaka sklearn, perhitungan cosine similarity dilakukan antar semua pasangan anime dalam dataset. Hasilnya adalah matriks kemiripan yang menyimpan nilai cosine antara setiap pasangan anime. Matriks ini menjadi dasar bagi sistem rekomendasi untuk menampilkan top-N recommendation, yaitu daftar anime yang paling mirip dengan judul yang diberikan pengguna berdasarkan skor kemiripan tertinggi.
 
-## Interpretasi
+## Inference
 ```
 title = "Naruto"
 rekomendasi = recommend(title)
@@ -290,3 +300,142 @@ rekomendasi
 > | Kimi no Suizou wo Tabetai     | I Want To Eat Your Pancreas    | drama, romance, slice of life, unknown | The aloof protagonist: a bookworm who is deeply...                       | Studio VOLN         | Finished Airing  | PG-13 - Teens 13 or older    | 8.561  |
 > | Kotonoha no Niwa              | The Garden of Words            | drama, romance, slice of life, unknown | On a rainy morning in Tokyo, Takao Akizuki, an...                        | CoMix Wave Films    | Finished Airing  | PG-13 - Teens 13 or older    | 7.911  |
 > | Josee to Tora to Sakana-tachi | Josee, the Tiger and the Fish  | drama, romance, slice of life, unknown | Equipped with his passion for diving and admiration...                   | Bones               | Finished Airing  | PG-13 - Teens 13 or older    | 8.441  |
+
+
+Contoh diatas merupakan penerapan dari model `recomended` yang sudah kita buat sebelumnya. Ketika pengguna memasukkan judul anime sebagai input, sistem akan membandingkan vektor konten anime tersebut dengan seluruh anime lain dalam dataset, kemudian memberikan daftar top-N anime yang paling mirip berdasarkan skor kemiripan tertinggi.
+
+Contohnya saya menjalankan kode kedua yang memberikan daftar rekomendasi anime/film yang mirip atau berkaitan dengan judul "Tenki no Ko" (Weathering with You). Rekomendasi tersebut disajikan dalam bentuk tabel dengan beberapa kolom yang mendeskripsikan setiap judul rekomendasi.
+
+# Evaluation
+
+### Metrik Evaluasi yang Digunakan
+
+Pada evaluasi ini, digunakan dua metrik utama untuk menilai performa sistem rekomendasi, yaitu **Precision@k** dan **Recall@k**.
+
+- **Precision@k**  
+  Precision@k mengukur proporsi rekomendasi yang benar-benar relevan dari keseluruhan **k** rekomendasi yang diberikan.  
+  Formula Precision@k adalah:
+    
+  $$\text{Precision@k} = \frac{|\text{Relevant Found}|}{k}$$ 
+
+  Di mana:  
+  - $$\text{Relevant Found}$$ adalah jumlah rekomendasi yang sesuai dengan ground truth (rekomendasi relevan).  
+  - $$k$$ adalah jumlah rekomendasi yang dihasilkan oleh sistem.
+
+- **Recall@k**  
+  Recall@k mengukur proporsi rekomendasi relevan yang berhasil ditemukan oleh sistem dari total rekomendasi relevan yang ada dalam ground truth.  
+  Formula Recall@k adalah:  
+
+  $$\text{Recall@k} = \frac{|\text{Relevant Found}|}{|\text{Ground Truth}|}$$
+
+  Di mana:  
+  - $$|\text{Ground Truth}|$$ adalah jumlah total item relevan sebenarnya.
+
+---
+
+### Cara Kerja Evaluasi
+
+```
+ground_truth = {
+    "Naruto": {"Bleach", "One Piece", "Hunter x Hunter (2011)", "Dragon Ball Z", "One Punch Man"},
+}
+```
+
+```
+def evaluate_recommendation(title, k=5):
+    recommended_df = recommend(title, k)
+    if isinstance(recommended_df, str):  # Jika error
+        return recommended_df
+
+    recommended_titles = set(recommended_df['Title'])
+    true_relevant = ground_truth.get(title, set())
+
+    if not true_relevant:
+        return f"Tidak ada ground truth untuk '{title}'"
+
+    relevant_found = recommended_titles.intersection(true_relevant)
+    precision = len(relevant_found) / k
+    recall = len(relevant_found) / len(true_relevant)
+
+    # Cetak hasil
+    print(f"\n🎯 Evaluasi untuk: {title}")
+    print("-" * 40)
+    print(f"Recommended Titles : {', '.join(recommended_titles)}")
+    print(f"Ground Truth       : {', '.join(true_relevant)}")
+    print(f"Relevant Found     : {', '.join(relevant_found) if relevant_found else 'None'}")
+    print("-" * 40)
+    print(f"✅ Precision@{k}     : {precision:.3f}")
+    print(f"✅ Recall@{k}        : {recall:.3f}")
+    print(f"📌 Found             : {len(relevant_found)} / {len(true_relevant)}")
+
+    return None
+```
+
+```
+evaluate_recommendation("Naruto", k=5)
+```
+
+> 🎯 Evaluasi untuk: Naruto
+>  
+> Recommended Titles : Nanatsu no Taizai, Hunter x Hunter (2011), Bleach, Naruto: Shippuuden, One Piece  
+> Ground Truth       : One Punch Man, Hunter x Hunter (2011), Dragon Ball Z, One Piece, Bleach  
+> Relevant Found     : Hunter x Hunter (2011), Bleach, One Piece
+> 
+> ✅ Precision@5     : 0.600  
+> ✅ Recall@5        : 0.600  
+> 📌 Found          : 3 / 5  
+
+Fungsi `evaluate_recommendation` bekerja dengan cara sebagai berikut:
+
+1. Memanggil fungsi `recommend(title, k)` untuk mendapatkan daftar rekomendasi sebanyak **k** item.
+2. Mengubah daftar rekomendasi tersebut menjadi set untuk memudahkan pencarian irisan (intersection).
+3. Mengambil data ground truth, yaitu daftar item relevan yang seharusnya direkomendasikan untuk judul tertentu.
+4. Mencari irisan antara rekomendasi dan ground truth untuk mengetahui berapa banyak rekomendasi yang relevan ditemukan.
+5. Menghitung nilai precision dan recall berdasarkan jumlah rekomendasi relevan yang ditemukan.
+6. Menampilkan hasil evaluasi secara rinci, meliputi daftar rekomendasi, ground truth, item relevan yang ditemukan, serta nilai precision dan recall.
+
+# Menjawab Pertanyaan
+
+### 1. Bagaimana cara membuat sistem rekomendasi anime yang baik dan relevan berdasarkan preferensi pengguna dan karakteristik anime?
+
+Untuk mengatasi permasalahan ini, dikembangkan fungsi recommend() yang mengimplementasikan sistem rekomendasi anime menggunakan pendekatan content-based filtering. Sistem ini menerima judul anime dari pengguna sebagai input, kemudian mencari anime lain yang mirip dengan input tersebut berdasarkan karakteristik seperti genre, dan demographics. Tingkat kemiripan antar anime dihitung dengan memperhatikan atribut-atribut tersebut agar rekomendasi yang diberikan sesuai dengan preferensi pengguna.
+
+```
+# Input dari pengguna
+user_input = input("Masukkan judul anime: ")
+
+# Jalankan rekomendasi
+recommendations = recommend(user_input, num_recommendations=5)
+
+# Tampilkan hasil
+if isinstance(recommendations, str):
+    print(recommendations)
+else:
+    print("\n🎉 Rekomendasi untuk:", user_input)
+    display(recommendations)
+```
+
+> Masukkan judul anime: **Kaguya-sama wa Kokurasetai: Tensai-tachi no Renai Zunousen**
+
+> 🎉 **Rekomendasi untuk: Kaguya-sama wa Kokurasetai: Tensai-tachi no Renai Zunousen**
+> | Title                                      | English                          | Content       | Synopsis                                                                                      | Studios       | Status           | Rating                     | Score |
+> |--------------------------------------------|---------------------------------|---------------|-----------------------------------------------------------------------------------------------|---------------|------------------|----------------------------|-------|
+> | Kaguya-sama wa Kokurasetai? Tensai-tachi no Renai Zunousen | Kaguya-sama Love is War Season 2 | comedy, seinen | After a slow but eventful summer vacation, Shu...                                            | A-1 Pictures  | Finished Airing  | PG-13 - Teens 13 or older  | 8.651 |
+> | Sakamoto Desu ga?                          | Haven't You Heard? I'm Sakamoto | comedy, seinen | Sophisticated, suave, sublime; all words which...                                             | Studio Deen   | Finished Airing  | PG-13 - Teens 13 or older  | 7.561 |
+> | Grand Blue                                 | Grand Blue Dreaming              | comedy, seinen | Iori Kitahara moves to the coastal town of Izu...                                            | Zero-G        | Finished Airing  | PG-13 - Teens 13 or older  | 8.431 |
+> | Himouto! Umaru-chan                        | Himouto! Umaru-chan             | comedy, seinen | People are not always who they appear to be, a...                                            | Doga Kobo     | Finished Airing  | PG-13 - Teens 13 or older  | 7.121 |
+> | Asobi Asobase                             | Asobi Asobase Workshop of Fun   | comedy, seinen | During recess, Olivia, a foreign transfer stud...                                            | Lerche        | Finished Airing  | PG-13 - Teens 13 or older  | 8.191 |
+ 
+Hasil rekomendasi untuk input "Kaguya-sama wa Kokurasetai: Tensai-tachi no Renai Zunousen" menampilkan anime dengan genre dan suasana yang mirip, seperti comedy dan seinen, dari studio terkenal, serta rating yang baik. Sistem ini mampu memberikan daftar anime yang sesuai tema dan kualitasnya, sehingga membantu pengguna menemukan anime baru yang cocok dengan selera mereka. Cara ini membuat sistem jadi mudah digunakan, tepat sasaran, dan membantu meningkatkan pengalaman menonton anime.
+
+### 2. Apa genre anime yang paling populer di kalangan pengguna MyAnimeList?
+
+![image](https://github.com/user-attachments/assets/54af4220-a2ba-4576-a976-41ca16d626bd)
+
+Grafik ini menunjukkan bahwa genre anime yang paling banyak dibuat adalah Comedy, disusul oleh Action dan Fantasy, yang berarti banyak orang suka anime yang lucu dan penuh aksi. Genre seperti Adventure, Sci-Fi, dan Drama juga cukup populer, karena banyak yang tertarik dengan cerita petualangan, teknologi, dan emosi. Sementara itu, genre seperti Romance, Slice of Life, dan Supernatural masih cukup sering muncul, tapi tidak sebanyak genre utama. Genre seperti Horror, Sports, dan Ecchi punya jumlah yang lebih sedikit, mungkin karena peminatnya lebih sedikit juga. Ada juga kategori Unknown yang cukup besar, kemungkinan karena datanya belum lengkap atau belum diklasifikasikan dengan jelas.
+
+# Referensi
+
+[1] Kumar, V., Pathak, M., & Choudhury, T. (2020). *A Comparative Study of Recommender Systems in E-commerce*. International Journal of Advanced Computer Science and Applications, 11(2), 517–523. doi:10.14569/IJACSA.2020.0110265
+
+[2] Ismail, M., Siregar, M. R., & Pinem, S. A. (2021). *Anime Recommendation System Based on Genre and Popularity Using Content-Based Filtering*. Journal of Computer Science and Engineering, 25(1), 34–42.
