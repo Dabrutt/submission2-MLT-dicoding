@@ -94,30 +94,6 @@ Ini menunjukkan bahwa popularitas genre tidak selalu berbanding lurus dengan kua
 - **Distribusi skor yang normal** menunjukkan adanya penyebaran penilaian yang adil dari pengguna.
 - Genre dengan skor tinggi dapat dijadikan fokus dalam sistem rekomendasi.
 
-# Data Preparation
-Dalam sistem rekomendasi content-based filtering, kita fokus pada fitur-fitur deskriptif dari konten itu sendiri, seperti genre, studio, sinopsis, atau tipe. Tujuannya adalah merekomendasikan item yang mirip berdasarkan karakteristik isi, bukan popularitas atau interaksi pengguna.
-
-```
-df.drop(['Synonyms', 'Japanese','Episodes', 'Start_Aired',
-         'End_Aired','Premiered', 'Broadcast','Producers', 'Licensors','Source',
-         'Themes','Duration_Minutes','Scored_Users',
-         'Ranked', 'Members', 'Favorites'],axis=1,inplace=True)
-```
-`df.columns`
-
-> Index(['ID', 'Title', 'English', 'Synopsis', 'Type', 'Status', 'Studios',
-       'Genres', 'Demographics', 'Rating', 'Score', 'Popularity'],
-      dtype='object')
-
-
-Fitur yang tetap dipertahankan adalah:
-- Title, English — digunakan sebagai identitas utama atau fitur teks.
-- Synopsis — dapat digunakan dalam NLP untuk ekstraksi fitur konten cerita.
-- Type, Status — memberi gambaran format dan status anime.
-- Studios — sebagai karakteristik produksi yang mungkin mencerminkan gaya cerita.
-- Genres, Demographics, Rating — fitur inti untuk mengukur kemiripan konten.
-- Score — bisa digunakan untuk filter kualitas, bukan untuk kemiripan.
-
 ### Deteksi Missing Value
 ![image](https://github.com/user-attachments/assets/bb22b0f0-c01e-4a25-ab24-b6de155a63f4)
 
@@ -144,34 +120,6 @@ Kolom ini memiliki 6.898 nilai kosong, yang merupakan jumlah tertinggi dibanding
 Tidak ditemukan data duplikat
 
 ### Deteksi outlier
-```
-# Deteksi Outlier dengan metode IQR
-def detect_outliers(data):
-    outlier_summary = {}
-    for column in data.select_dtypes(include=np.number).columns:
-        Q1 = data[column].quantile(0.25)
-        Q3 = data[column].quantile(0.75)
-        IQR = Q3 - Q1
-        lower_bound = Q1 - 1.5 * IQR
-        upper_bound = Q3 + 1.5 * IQR
-        outliers = data[(data[column] < lower_bound) | (data[column] > upper_bound)]
-        outlier_summary[column] = len(outliers)
-
-    return outlier_summary
-
-# Menjalankan fungsi untuk dataset (tanpa kolom target)
-indicators_columns = df.drop(columns=['risk_score'], errors='ignore')
-outlier_counts = detect_outliers(indicators_columns)
-
-# Menampilkan jumlah outlier per kolom
-print("Jumlah outlier per kolom:")
-for col, count in outlier_counts.items():
-    print(f"{col}: {count}")
-```
-> Jumlah outlier per kolom:
-> </br>ID: 0
-> </br>Score: 81
-> </br>Popularity: 0
 
 Dalam proses eksplorasi data, ditemukan bahwa nilai outlier hanya teridentifikasi pada kolom Score. Oleh karena itu, fokus analisis terhadap outlier cukup diarahkan pada kolom Score saja.
 
@@ -183,6 +131,30 @@ Dalam proses eksplorasi data, ditemukan bahwa nilai outlier hanya teridentifikas
 > </br>Jumlah outlier pada kolom 'Score': 81
 
 Outlier dalam data `Score` mencerminkan opini atau penilaian pengguna yang sangat ekstrim. Dalam konteks sistem rekomendasi, nilai-nilai ini penting untuk dipertahankan, karena membantu mengenali pola preferensi pengguna yang lebih jelas dan tajam.
+
+# Data Preparation
+Dalam sistem rekomendasi content-based filtering, kita fokus pada fitur-fitur deskriptif dari konten itu sendiri, seperti genre, studio, sinopsis, atau tipe. Tujuannya adalah merekomendasikan item yang mirip berdasarkan karakteristik isi, bukan popularitas atau interaksi pengguna.
+
+```
+df.drop(['Synonyms', 'Japanese','Episodes', 'Start_Aired',
+         'End_Aired','Premiered', 'Broadcast','Producers', 'Licensors','Source',
+         'Themes','Duration_Minutes','Scored_Users',
+         'Ranked', 'Members', 'Favorites'],axis=1,inplace=True)
+```
+`df.columns`
+
+> Index(['ID', 'Title', 'English', 'Synopsis', 'Type', 'Status', 'Studios',
+       'Genres', 'Demographics', 'Rating', 'Score', 'Popularity'],
+      dtype='object')
+
+
+Fitur yang tetap dipertahankan adalah:
+- Title, English — digunakan sebagai identitas utama atau fitur teks.
+- Synopsis — dapat digunakan dalam NLP untuk ekstraksi fitur konten cerita.
+- Type, Status — memberi gambaran format dan status anime.
+- Studios — sebagai karakteristik produksi yang mungkin mencerminkan gaya cerita.
+- Genres, Demographics, Rating — fitur inti untuk mengukur kemiripan konten.
+- Score — bisa digunakan untuk filter kualitas, bukan untuk kemiripan.
 
 ### Data Cleaning
 `df_clean = df.dropna()`
@@ -198,33 +170,15 @@ print(f"Jumlah baris sesudah data cleansing: {df_clean.shape[0]}")
 Saya hanya menghapus data yang mengandung nilai kosong, karena sebagian besar data yang hilang terdapat pada kolom rating dan skor. Hal ini menunjukkan bahwa anime tersebut kemungkinan masih baru atau bahkan belum dirilis, sehingga dapat memengaruhi hasil analisis akhir.
 
 ### Ekstraksi Fitur
-```
-# Gabungkan kolom konten (Genre + Studio + Demographics) menjadi satu string deskriptif
-df_clean['Content'] = df_clean['Genres'] + ', ' + df_clean['Demographics'].fillna('')
-```
-
-Kode ini digunakan untuk menggabungkan kolom Genres dan Demographics ke dalam satu kolom baru bernama Content. Tujuannya adalah menyatukan informasi deskriptif dari suatu anime agar dapat dianalisis sebagai satu kesatuan teks.
+Langkah ini diawali dengan menggabungkan value dari kolom Genres dan Demographics ke dalam satu kolom baru bernama Content. Tujuannya adalah menyatukan informasi penting seperti jenis cerita dan target penonton ke dalam satu kolom bernama Content. Dengan cara ini, seluruh informasi deskriptif bisa diperlakukan sebagai satu teks utuh, sehingga lebih mudah diolah dalam proses vektorisasi dan digunakan dalam sistem rekomendasi berbasis konten.
 
 ```
-# Normalisasi teks genre (hilangkan null dan lowercase)
 df_clean['Content'] = df_clean['Content'].fillna('').str.lower()
 ```
 
 Setelah kolom Content terbentuk, langkah ini bertujuan untuk melakukan normalisasi teks dengan mengubah semua huruf menjadi huruf kecil (lowercase) dan menghilangkan nilai kosong. Ini penting untuk memastikan konsistensi format teks sebelum dilakukan proses vektorisasi.
 
-```
-from sklearn.feature_extraction.text import TfidfVectorizer
-
-# TF-IDF Vectorization pada 'content'
-tfidf = TfidfVectorizer(stop_words='english')
-tfidf_matrix = tfidf.fit_transform(df_clean['Content'])
-
-# Cek bentuk matriks
-print(f"TF-IDF matrix shape: {tfidf_matrix.shape}")
-```
-> TF-IDF matrix shape: (14465, 32)
-
-Blok kode ini menerapkan teknik TF-IDF untuk mengubah teks pada kolom Content menjadi bentuk numerik. TF-IDF digunakan untuk menilai seberapa penting suatu kata dalam deskripsi anime dibandingkan dengan seluruh koleksi data, sekaligus mengabaikan kata-kata umum (stop words) berbahasa Inggris.
+Kemudian, digunakan teknik TF-IDF (Term Frequency-Inverse Document Frequency) untuk mengubah teks pada kolom Content menjadi bentuk numerik. TF-IDF membantu mengukur seberapa penting suatu kata dalam deskripsi anime dibandingkan dengan seluruh data yang ada, sambil mengabaikan kata-kata umum yang tidak memiliki makna khusus (stop words). Hasil dari proses ini adalah matriks numerik yang merepresentasikan setiap anime berdasarkan kata-kata yang terkandung dalam deskripsinya, yang kemudian digunakan dalam perhitungan kemiripan konten.
 
 Kemudian `print(f"TF-IDF matrix shape: {tfidf_matrix.shape}")` digunakan untuk menampilkan ukuran matriks TF-IDF yang terbentuk. Ukuran tersebut menunjukkan jumlah anime (baris) dan jumlah fitur unik (kata-kata penting) yang berhasil diekstraksi dari kolom Content.
 
